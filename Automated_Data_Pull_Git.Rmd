@@ -1,0 +1,70 @@
+--- 
+title: 
+author: "Jesse Normand"
+output:
+pdf_document:
+toc: false
+---
+
+```{r warning=FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(odbc)
+library(scales)
+```
+
+## Automated SQL Pull
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+
+################################
+#SQL Automated
+###############################
+#Connect to SQL Database
+timestamp()
+
+con <- DBI::dbConnect(odbc::odbc(),
+                      driver = "SQL Server",
+                      server = "....windows.net",
+                      database = "...",
+                      uid = "....database.windows.net",
+                      pwd = "...")
+#SQL Query
+db_sql <- con %>% 
+  tbl(
+    sql(
+      "SELECT *
+      FROM dbo.ins
+      WHERE Debit IS NOT NULL
+      "
+    )
+  ) %>% collect()
+
+odbc::dbDisconnect(con)
+
+attach(db_sql)
+
+#Data transformation 
+#Convert to date
+db_sql$Date <- as_date(db_sql$Date)
+
+db_sql <- mutate(db_sql, Debit = as.numeric(Debit)) %>% 
+  mutate(Revenue = Debit * .32)  
+
+sum_group <- db_sql %>% group_by(Year = lubridate::floor_date(Date, 'day')) %>% 
+  filter(Year > "2022-06-30", Year < "2022-07-31")  %>% 
+  summarize(sum_revenue = sum(Revenue))
+
+#Plot
+sum_group %>% 
+ggplot(aes(Year, sum_revenue)) +
+  geom_bar(stat="identity", 
+           position="identity", 
+           fill="#1380A1") +
+  geom_hline(yintercept = 0, size = 1, colour="#333333") +
+  scale_y_continuous(labels=scales::dollar_format()) + 
+  bbc_style() +  labs(title="Sales Revenue",
+                          subtitle = "July Daily Sales Goal @ $150,000") +  geom_hline(yintercept = 100000, size = 1, colour = "darkred", linetype = "dashed")
+
+```
